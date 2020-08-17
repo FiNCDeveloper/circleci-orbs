@@ -1,0 +1,37 @@
+# orb name: finc/kustomize
+version: 2.1
+description: "Install kustomize"
+
+commands:
+  install:
+    description: "Install kustomize(v3.8.1 by default)"
+    parameters:
+      version:
+        type: string
+        default: "v3.8.1"
+        description: "Please see release page: https://github.com/kubernetes-sigs/kustomize/releases"
+    steps:
+      - run:
+          name: "Install kustomize"
+          command: |
+            URL=https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/<< parameters.version >>/kustomize_<< parameters.version >>_linux_amd64.tar.gz
+            curl -L $URL | tar zx
+
+            [ -w /usr/local/bin ] && SUDO="" || SUDO=sudo
+            $SUDO chmod +x ./kustomize
+            $SUDO mv ./kustomize /usr/local/bin
+
+examples:
+  install:
+    description: "install kustomize"
+    usage:
+      version: 2.1
+      orbs:
+        kustomize: finc/kustomize@0.0.1
+      jobs:
+        build:
+          docker:
+            - image: circleci/golang:1.15
+          steps:
+            - kustomize/install
+
