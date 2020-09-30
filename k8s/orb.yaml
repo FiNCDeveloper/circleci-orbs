@@ -15,18 +15,15 @@ commands:
         description: "deploy target kubernetes namespace"
       resource-name:
         type: string
-        description: "Specific deployment name. IMPORTANT: Currently supported only deployment. Do not supported daemonset, statefulset."
+        description: "Specific deployment name. IMPORTANT: Currently supports only deployment. daemonset and statefulset are not supported."
     steps:
       - kube-orb/install-kubectl
       - run:
           name: "Get current deployment revison"
-          description: >
-            The length of time to wait before ending the watch, zero means never.
-
-            Any other values should contain a corresponding time unit (e.g. 1s, 2m,3h).
+          description: "Fetch deployment current revision from cluster. It's used to deployment rollout undo."
           command: |
             # NOTE:
-            # Naming rule basics: namespace, deployment name is converted repository name to kebab-case.
+            # Naming rule basics: namespace, deployment name is repository name converted to kebab-case.
             K8S_NAMESPACE="<< parameters.namespace >>"
             if [ -z "K8S_NAMESPACE" ]; then
               K8S_NAMESPACE=${CIRCLE_PROJECT_REPONAME//_/-}
@@ -42,11 +39,13 @@ commands:
             echo "export __FINC_K8S_INIT_FLAG__=1" >> $BASH_ENV
 
   rollback-deployment-on-fail:
-    description: >
-      "rollback deployment when on fail"
+    description: |
+      "rollback deployment on failure"
+
+      Requirements: Executed 'init-current-revision' before deploy
     parameters:
       rollback-target:
-        description: "rollback target"
+        description: "rollback target. enum: 'stable' or 'canary'"
         type: enum
         enum: ["stable", "canary"]
     steps:
@@ -79,13 +78,13 @@ commands:
               fi
 
   db-migration:
-    description: >
-      DB migration
+    description: |
+      DB migration from kubernetes job.
 
       Requirements:
-      - kubeconfig should be configured to connect to the cluster.
-      - This command is assumed that the migration job manifest file and kustomization.yaml is placed '.circleci' directory.
-      - Job has a 'finc.com/migration-pod-for' label. It's use for search exsisting old migration job.
+        - kubeconfig should be configured to connect to the cluster.
+        - This command assumes that the migration job manifest file and kustomization.yaml are placed in '.circleci' directory.
+        - Job has a 'finc.com/migration-pod-for' label. It's used to search existing old migration job.
     parameters:
       deployment-name:
         type: string
@@ -100,19 +99,19 @@ commands:
       migration-pod-for:
         type: string
         description: |
-            'finc.com/migration-pod-for' label's value
+            'finc.com/migration-pod-for' label's value.
 
-            In most cases, set the same as the deployment name
+            In most cases, set the same as the deployment name.
       job-image:
         type: string
-        description: "Container image used for migration job"
+        description: "URI for container image used for migration job"
       job-manifest:
         type: string
-        description: "Migration job manifest file name. It's assumed exists in '.circleci/' directory"
+        description: "Migration job manifest file name. It's assumed to exist in '.circleci/' directory"
         default: "db-migrate-job.yaml"
       configmap-name-placeholder:
         type: string
-        description: "Placeholder for deployment envFrom configmap name. It's replace to with suffixed name from deployment manifest."
+        description: "Placeholder for deployment envFrom configmap name. It's replaced with suffixed name from cluster deployment resource."
         default: "__CONFIG_MAP_PLACEHOLDER__"
     steps:
       - checkout
@@ -164,7 +163,7 @@ commands:
 
 examples:
   rollback-deployment-on-fail:
-    description: >
+    description: |
       rollback deployment revision if deploy fail.
 
       Requirements:
@@ -190,3 +189,27 @@ examples:
             - rollback-deployment-on-fail:
                 rollback-target: "stable"
 
+  db-migration:
+    description: |
+      rollback deployment revision if deploy fail.
+
+      Requirements:
+      - kubeconfig should be configured to connect to the cluster.
+      - This command assumes that the migration job manifest file and 'kustomization.yaml' are placed in '.circleci' directory.
+      - Job manifest has a 'finc.com/migration-pod-for' label. It's used to search existing old migration job.
+    usage:
+      version: 2.1
+      orbs:
+        finc-k8s: finc/k8s@0.0.1
+        k8s: circleci/kubernetes@0.11.0
+      jobs:
+        build:
+          docker:
+            - image: circleci/golang:1.15
+          steps:
+            - kube-orb/install-kubeconfig:
+                kubeconfig: KUBECONFIG_STAGING_DATA
+            - finc-k8s/db-migration:
+                namespace: example
+                migration-pod-for: example
+                job-image: example-migration-job:latest
