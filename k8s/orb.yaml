@@ -1,0 +1,215 @@
+# orb name: finc/k8s
+version: 2.1
+description: "FiNC Technologies kubernetes deploy toolbox"
+
+orbs:
+  kube-orb: circleci/kubernetes@0.11.0
+  kustomize: finc/kustomize@0.0.1
+
+commands:
+  init-current-revision:
+    description: "Gets the revision to roll back on failure."
+    parameters:
+      namespace:
+        type: string
+        description: "deploy target kubernetes namespace"
+      resource-name:
+        type: string
+        description: "Specific deployment name. IMPORTANT: Currently supports only deployment. daemonset and statefulset are not supported."
+    steps:
+      - kube-orb/install-kubectl
+      - run:
+          name: "Get current deployment revison"
+          description: "Fetch deployment current revision from cluster. It's used to deployment rollout undo."
+          command: |
+            # NOTE:
+            # Naming rule basics: namespace, deployment name is repository name converted to kebab-case.
+            K8S_NAMESPACE="<< parameters.namespace >>"
+            if [ -z "K8S_NAMESPACE" ]; then
+              K8S_NAMESPACE=${CIRCLE_PROJECT_REPONAME//_/-}
+            fi
+
+            K8S_DEPLOYMENT=${CIRCLE_PROJECT_REPONAME//_/-}
+
+            echo "export __FINC_K8S_NAMESPACE=${K8S_NAMESPACE}"  >> $BASH_ENV
+            echo "export __FINC_K8S_DEPLOYMENT=${K8S_DEPLOYMENT}" >> $BASH_ENV
+            echo "export __FINC_K8S_CONTAINER=${CIRCLE_PROJECT_REPONAME//_/-}" >> $BASH_ENV
+            echo "export __FINC_BEFORE_DEPLOYMENT_REVISION=$(kubectl get -n $K8S_NAMESPACE deployment/$K8S_DEPLOYMENT -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')" >> $BASH_ENV
+            echo "export __FINC_K8S_CANARY_BEFORE_DEPLOYMENT_REVISION=$(kubectl get --ignore-not-found -n $K8S_NAMESPACE deployment/$K8S_DEPLOYMENT-canary -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')" >> $BASH_ENV
+            echo "export __FINC_K8S_INIT_FLAG__=1" >> $BASH_ENV
+
+  rollback-deployment-on-fail:
+    description: |
+      "rollback deployment on failure"
+
+      Requirements: Executed 'init-current-revision' before deploy
+    parameters:
+      rollback-target:
+        description: "rollback target. enum: 'stable' or 'canary'"
+        type: enum
+        enum: ["stable", "canary"]
+    steps:
+      - run:
+          when: on_fail
+          name: "rollback deployment"
+          command: |
+              case "<< parameters.rollback-target >>" in
+                stable)
+                  target="deployment/$__FINC_K8S_DEPLOYMENT"
+                  rev="$__FINC_BEFORE_DEPLOYMENT_REVISION"
+                  ;;
+                canary)
+                  target="deployment/$__FINC_K8S_DEPLOYMENT-canary"
+                  rev="$__FINC_K8S_CANARY_BEFORE_DEPLOYMENT_REVISION"
+                  ;;
+              esac
+
+              if [ -z "$rev" ]; then
+                echo "[WARN] unknown before revision"
+                exit
+              fi
+
+              CURRENT_REVISION=$(kubectl get -n "$__FINC_K8S_NAMESPACE" "$target" -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
+              if [[ -n "$target" && "$rev" != "$CURRENT_REVISION" ]]; then
+                echo "rollback $target to revision: $rev"
+                kubectl rollout undo --dry-run "$target" -n "$__FINC_K8S_NAMESPACE" --to-revision=$rev
+              else
+                echo "Did not unnecessary rollback as it. because same revision."
+              fi
+
+  db-migration:
+    description: |
+      DB migration from kubernetes job.
+
+      Requirements:
+        - kubeconfig should be configured to connect to the cluster.
+        - This command assumes that the migration job manifest file and kustomization.yaml are placed in '.circleci' directory.
+        - Job has a 'finc.com/migration-pod-for' label. It's used to search existing old migration job.
+    parameters:
+      deployment-name:
+        type: string
+        description: |
+            DB migration target application deployment.
+
+            When not set this value is same value of 'migration-pod-for' value
+        default: ""
+      namespace:
+        type: string
+        description: "DB migration target kubernetes namespace"
+      migration-pod-for:
+        type: string
+        description: |
+            'finc.com/migration-pod-for' label's value.
+
+            In most cases, set the same as the deployment name.
+      job-image:
+        type: string
+        description: "URI for container image used for migration job"
+      job-manifest:
+        type: string
+        description: "Migration job manifest file name. It's assumed to exist in '.circleci/' directory"
+        default: "db-migrate-job.yaml"
+      configmap-name-placeholder:
+        type: string
+        description: "Placeholder for deployment envFrom configmap name. It's replaced with suffixed name from cluster deployment resource."
+        default: "__CONFIG_MAP_PLACEHOLDER__"
+    steps:
+      - checkout
+      - kustomize/install
+      - run:
+          name: "Check if migration job exists"
+          command: |
+            K8S_NAMESPACE="<< parameters.namespace >>"
+            job=$(kubectl get job -n "<< parameters.namespace >>" -l finc.com/migration-pod-for="<< parameters.migration-pod-for >>" --no-headers -o custom-columns=":metadata.name")
+            if [ -n "$job" ]; then
+              echo "Migration job already exists. Delete it if unnecessary"
+              echo "$ kubectl delete -n "<< parameters.namespace >>" $job"
+              exit 10
+            fi
+      - run:
+          name: "DB migration"
+          command: |
+            cd .circleci
+
+            K8S_NAMESPACE="<< parameters.namespace >>"
+
+            K8S_DEPLOYMENT="<<parameters.deployment-name>>"
+            if [ -z "$K8S_DEPLOYMENT" ]; then
+              K8S_DEPLOYMENT="<< parameters.migration-pod-for >>"
+            fi
+
+            configmap=$(kubectl get deployment -n $K8S_NAMESPACE $K8S_DEPLOYMENT -ojson | jq -r '.spec.template.spec.containers[] | select(.name == "'$K8S_NAMESPACE'") | .envFrom[].configMapRef.name' | grep "^${K8S_NAMESPACE}-config")
+            sed -i "s/<< parameters.configmap-name-placeholder >>/${configmap}/g" << parameters.job-manifest >>
+
+            kustomize edit set image "<< parameters.job-image >>"
+            kustomize edit set namespace "<< parameters.namespace >>"
+            kustomize build | kubectl apply -f -
+
+            kubectl wait -n "<< parameters.namespace >>" --for=condition=complete --timeout=30m job/db-migration & completion_pid=$!
+            kubectl wait -n "<< parameters.namespace >>" --for=condition=failed   --timeout=30m job/db-migration && exit 1 & failure_pid=$!
+            wait -n $completion_pid $failure_pid
+
+            for pod in $(kubectl get pod -n "<< parameters.namespace >>" -l "finc.com/migration-pod-for=<< parameters.migration-pod-for >>" --no-headers -o custom-columns=":metadata.name"); do
+              echo "------------------------------------------------------------"
+              echo "[$pod] Migration log"
+              echo "------------------------------------------------------------"
+              kubectl logs -n "<< parameters.namespace >>" "$pod"
+            done
+      - run:
+          name: "Clean up migration job resource"
+          when: always
+          command: |
+            kubectl delete jobs.batch -n "<< parameters.namespace >>" db-migration
+
+examples:
+  rollback-deployment-on-fail:
+    description: |
+      rollback deployment revision if deploy fail.
+
+      Requirements:
+      - kubeconfig should be configured to connect to the cluster.
+      - Execute 'init-current-revision' before deploy
+    usage:
+      version: 2.1
+      orbs:
+        finc-k8s: finc/k8s@0.0.1
+        k8s: circleci/kubernetes@0.11.0
+      jobs:
+        build:
+          docker:
+            - image: circleci/golang:1.15
+          steps:
+            - init-current-revision:
+                namespace: "example"
+                resource-name: "example"
+            - kube-orb/update-container-image:
+                container-image-updates: example=example:latest
+                namespace: example
+                resource-name: deployment/example
+            - rollback-deployment-on-fail:
+                rollback-target: "stable"
+
+  db-migration:
+    description: |
+      rollback deployment revision if deploy fail.
+
+      Requirements:
+      - kubeconfig should be configured to connect to the cluster.
+      - This command assumes that the migration job manifest file and 'kustomization.yaml' are placed in '.circleci' directory.
+      - Job manifest has a 'finc.com/migration-pod-for' label. It's used to search existing old migration job.
+    usage:
+      version: 2.1
+      orbs:
+        finc-k8s: finc/k8s@0.0.1
+        k8s: circleci/kubernetes@0.11.0
+      jobs:
+        build:
+          docker:
+            - image: circleci/golang:1.15
+          steps:
+            - kube-orb/install-kubeconfig:
+                kubeconfig: KUBECONFIG_STAGING_DATA
+            - finc-k8s/db-migration:
+                namespace: example
+                migration-pod-for: example
+                job-image: example-migration-job:latest
