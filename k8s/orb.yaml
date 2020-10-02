@@ -129,7 +129,7 @@ commands:
       - run:
           name: "DB migration"
           command: |
-            cd .circleci
+            cd $CIRCLE_WORKING_DIRECTORY/.circleci
 
             K8S_NAMESPACE="<< parameters.namespace >>"
 
