@@ -129,7 +129,8 @@ commands:
       - run:
           name: "DB migration"
           command: |
-            cd $CIRCLE_WORKING_DIRECTORY/.circleci
+            # evaluate default value: '~/project'
+            eval cd $CIRCLE_WORKING_DIRECTORY/.circleci
 
             K8S_NAMESPACE="<< parameters.namespace >>"
 
@@ -138,7 +139,7 @@ commands:
               K8S_DEPLOYMENT="<< parameters.migration-pod-for >>"
             fi
 
-            configmap=$(kubectl get deployment -n $K8S_NAMESPACE $K8S_DEPLOYMENT -ojson | jq -r '.spec.template.spec.containers[] | select(.name == "'$K8S_NAMESPACE'") | .envFrom[].configMapRef.name' | grep "^${K8S_NAMESPACE}-config")
+            configmap=$(kubectl get deployment -n $K8S_NAMESPACE $K8S_DEPLOYMENT -ojson | jq -r '.spec.template.spec.containers[] | select(.name == "'$K8S_DEPLOYMENT'") | .envFrom[].configMapRef.name' | grep "^${K8S_DEPLOYMENT}-config")
             sed -i "s/<< parameters.configmap-name-placeholder >>/${configmap}/g" << parameters.job-manifest >>
 
             kustomize edit set image "<< parameters.job-image >>"
