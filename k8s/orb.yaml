@@ -129,7 +129,8 @@ commands:
       - run:
           name: "DB migration"
           command: |
-            cd $CIRCLE_WORKING_DIRECTORY/.circleci
+            # evaluate default value: '~/project'
+            eval cd $CIRCLE_WORKING_DIRECTORY/.circleci
 
             K8S_NAMESPACE="<< parameters.namespace >>"
 
