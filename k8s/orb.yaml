@@ -129,7 +129,7 @@ commands:
       - run:
           name: "DB migration"
           command: |
-            cd .circleci
+            cd $CIRCLE_WORKING_DIRECTORY/.circleci
 
             K8S_NAMESPACE="<< parameters.namespace >>"
 
@@ -159,7 +159,7 @@ commands:
           name: "Clean up migration job resource"
           when: always
           command: |
-            kubectl delete jobs.batch -n "<< parameters.namespace >>" db-migration
+            kubectl delete --ignore-not-found jobs.batch -n "<< parameters.namespace >>" db-migration
 
 examples:
   rollback-deployment-on-fail:
