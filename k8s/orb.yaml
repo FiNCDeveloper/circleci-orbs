@@ -72,7 +72,7 @@ commands:
               CURRENT_REVISION=$(kubectl get -n "$__FINC_K8S_NAMESPACE" "$target" -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
               if [[ -n "$target" && "$rev" != "$CURRENT_REVISION" ]]; then
                 echo "rollback $target to revision: $rev"
-                kubectl rollout undo --dry-run "$target" -n "$__FINC_K8S_NAMESPACE" --to-revision=$rev
+                kubectl rollout undo "$target" -n "$__FINC_K8S_NAMESPACE" --to-revision=$rev
               else
                 echo "Did not unnecessary rollback as it. because same revision."
               fi
