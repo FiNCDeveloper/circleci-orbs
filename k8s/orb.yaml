@@ -146,16 +146,16 @@ commands:
             kustomize edit set namespace "<< parameters.namespace >>"
             kustomize build | kubectl apply -f -
 
-            kubectl wait -n "<< parameters.namespace >>" --for=condition=complete --timeout=30m job/db-migration & completion_pid=$!
-            kubectl wait -n "<< parameters.namespace >>" --for=condition=failed   --timeout=30m job/db-migration && exit 1 & failure_pid=$!
-            wait -n $completion_pid $failure_pid
-
             for pod in $(kubectl get pod -n "<< parameters.namespace >>" -l "finc.com/migration-pod-for=<< parameters.migration-pod-for >>" --no-headers -o custom-columns=":metadata.name"); do
               echo "------------------------------------------------------------"
               echo "[$pod] Migration log"
               echo "------------------------------------------------------------"
-              kubectl logs -n "<< parameters.namespace >>" "$pod"
+              kubectl logs -f -n "<< parameters.namespace >>" "$pod" &
             done
+
+            kubectl wait -n "<< parameters.namespace >>" --for=condition=complete --timeout=30m job/db-migration & completion_pid=$!
+            kubectl wait -n "<< parameters.namespace >>" --for=condition=failed   --timeout=30m job/db-migration && exit 1 & failure_pid=$!
+            wait -n $completion_pid $failure_pid
       - run:
           name: "Clean up migration job resource"
           when: always
