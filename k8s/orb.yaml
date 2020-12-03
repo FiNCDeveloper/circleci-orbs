@@ -150,12 +150,36 @@ commands:
             kubectl wait -n "<< parameters.namespace >>" --for=condition=failed   --timeout=30m job/db-migration && exit 1 & failure_pid=$!
             wait -n $completion_pid $failure_pid
 
+      - run:
+          name: "Print migration logs"
+          when: always
+          command: |
             for pod in $(kubectl get pod -n "<< parameters.namespace >>" -l "finc.com/migration-pod-for=<< parameters.migration-pod-for >>" --no-headers -o custom-columns=":metadata.name"); do
               echo "------------------------------------------------------------"
               echo "[$pod] Migration log"
               echo "------------------------------------------------------------"
               kubectl logs -n "<< parameters.namespace >>" "$pod"
             done
+
+      - run:
+          name: "Print debug logs (kustomize build / events / describe pod)"
+          when: on_fail
+          command: |
+            echo "------------------------------------------------------------"
+            echo "Result of kustomize build"
+            echo "------------------------------------------------------------"
+            kustomize build .circleci
+
+            echo "------------------------------------------------------------"
+            echo "kubectl get events"
+            echo "------------------------------------------------------------"
+            kubectl get events -n "<< parameters.namespace >>" --sort-by=.metadata.creationTimestamp | grep db-migration
+
+            echo "------------------------------------------------------------"
+            echo "kubectl describe pod"
+            echo "------------------------------------------------------------"
+            kubectl describe pod -n "<< parameters.namespace >>" -l "finc.com/migration-pod-for=<< parameters.migration-pod-for >>"
+
       - run:
           name: "Clean up migration job resource"
           when: always
