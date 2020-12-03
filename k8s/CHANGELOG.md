@@ -14,9 +14,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ### Added
 
-- Print infomation on fail. It's contains event, pod describe and executed manfest.
+- Print information on fail. It contains events, pod description and executed manifest.
 
 ### Fixed
 
 - Log is not output on DB migration failure.
-
