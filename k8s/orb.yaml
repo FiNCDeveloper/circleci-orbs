@@ -303,6 +303,26 @@ commands:
             kubectl delete --ignore-not-found jobs.batch -n "<< parameters.namespace >>" db-migration
 
 examples:
+  deployment-update-and-rollback-on-fail:
+    description: |
+      Update kubernetes resource.
+      Rollback deployment revision if deploy fail.
+    usage:
+      version: 2.1
+      orbs:
+        finc-k8s: finc/k8s@x.y.z
+        k8s: circleci/kubernetes@x.y.z
+      jobs:
+        build:
+          docker:
+            - image: circleci/golang:x.y
+          steps:
+            - finc-k8s/update-container-images:
+                container-image-updates: example1=example1:latest example2=example2:latest
+                namespace: example
+                watch-timeout: 5m
+                deployment-target: stable
+
   rollback-deployment-on-fail:
     description: |
       rollback deployment revision if deploy fail.
