@@ -354,7 +354,7 @@ examples:
 
   db-migration:
     description: |
-      rollback deployment revision if deploy fail.
+      DB migration from kubernetes job.
 
       Requirements:
       - kubeconfig should be configured to connect to the cluster.
