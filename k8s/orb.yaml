@@ -325,6 +325,8 @@ examples:
 
   rollback-deployment-on-fail:
     description: |
+      (Deprecated) Consider to use update-container-images.
+
       rollback deployment revision if deploy fail.
 
       Requirements:
