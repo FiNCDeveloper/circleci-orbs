@@ -97,7 +97,8 @@ commands:
         default: ""
       dry-run:
         description: |
-          Specify dry-run strategy
+          Specify the dry-run strategy that the `kubectl set image` command will be executed with.
+          See: https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#-em-image-em-
         type: enum
         enum: ["none", "client", "server"]
         default: "none"
