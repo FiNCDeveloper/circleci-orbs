@@ -86,7 +86,8 @@ commands:
       container-image-updates:
         type: string
         description: |
-          Specify a list of container image updates
+          Specify a list of container image updates in the space-delimited format.
+          (e.g. container1:latest nginx:1.9.1)
       namespace:
         type: string
         description: |
@@ -137,7 +138,7 @@ commands:
           name: "Update container images"
           description: "Update container images by using the `kubectl set image`. Filter given container names before updating deployment images."
           command: |
-            CONTAINER_IMAGE_UPDATES="<< parameters.container-image-updates >>"
+            container_image_updates=($(echo "<< parameters.container-image-updates >>" | awk '{cnt=split($0, res, " ");for (i=1;i<=cnt;i++) print res[i]}'))
 
             DRY_RUN="<< parameters.dry-run >>"
 
@@ -147,15 +148,21 @@ commands:
               echo "============================================================"
               echo "deployment: $dep"
               echo "============================================================"
-              # Build a new container_name=image_name pairs from the provided values to match the container names in the target deployment resource.
-              container_names=($(echo $(kubectl get -n $__FINC_K8S_NAMESPACE deployment/$dep -o json | jq -r '.spec.template.spec.containers[] | .name')))
-              regexpr=$(IFS='|'; echo "${container_names[*]}")
-              target_container_images=($(echo $CONTAINER_IMAGE_UPDATES | awk '{cnt=split($0, res, " ");for (i=1;i<=cnt;i++) print res[i]}' | awk '/'"${regexpr}"'/ { print }'))
+              # Build a new container_name=image_name pairs from the provided values to match the container image names in the target deployment resource.
+              pod_spec=$(kubectl get --namespace=$__FINC_K8S_NAMESPACE deployment/$dep -o jsonpath --template {.spec.template.spec})
+
+              for container in ${container_image_updates[@]}; do
+                image_name=$(echo $container | awk -F ':' '{ print $1 }')
+                container_name=$(echo $pod_spec | jq -r --arg image_name $image_name '.containers[] | select(.image | startswith($image_name)) | .name')
+                if [ -n "$container_name" ]; then
+                  set -- "$@" "${container_name}=${container}"
+                fi
+              done
 
               echo "------------------------------------------------------------"
               echo "set image"
               echo "------------------------------------------------------------"
-              kubectl set image --namespace=$__FINC_K8S_NAMESPACE deployment/$dep $target_container_images --dry-run=$DRY_RUN
+              kubectl set image --namespace=$__FINC_K8S_NAMESPACE deployment/$dep $@ --dry-run=$DRY_RUN
 
               echo "------------------------------------------------------------"
               echo "rollout status"
@@ -166,6 +173,8 @@ commands:
               echo "describe"
               echo "------------------------------------------------------------"
               kubectl describe --namespace=$__FINC_K8S_NAMESPACE deployment/$dep
+
+              set --
             done
       - run:
           when: on_fail
@@ -319,7 +328,7 @@ examples:
             - image: circleci/golang:x.y
           steps:
             - finc-k8s/update-container-images:
-                container-image-updates: example1=example1:latest example2=example2:latest
+                container-image-updates: example1:latest example2:latest
                 namespace: example
                 watch-timeout: 5m
                 deployment-target: stable
