@@ -191,7 +191,7 @@ commands:
 
               if [ -z "$rev" ]; then
                 echo "[WARN] unknown before revision"
-                exit
+                continue
               fi
 
               CURRENT_REVISION=$(kubectl get -n "$__FINC_K8S_NAMESPACE" "$target" -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
