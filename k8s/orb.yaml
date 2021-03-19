@@ -324,12 +324,15 @@ examples:
       version: 2.1
       orbs:
         finc-k8s: finc/k8s@x.y.z
-        k8s: circleci/kubernetes@x.y.z
+        kube-orb: circleci/kubernetes@x.y.z
       jobs:
         build:
           docker:
             - image: circleci/golang:x.y
           steps:
+            - kube-orb/install-kubectl
+            - kube-orb/install-kubeconfig:
+                kubeconfig: KUBECONFIG_DATA
             - finc-k8s/update-container-images:
                 container-image-updates: example1:latest example2:latest
                 namespace: example
@@ -375,14 +378,15 @@ examples:
       version: 2.1
       orbs:
         finc-k8s: finc/k8s@0.0.1
-        k8s: circleci/kubernetes@0.11.0
+        kube-orb: circleci/kubernetes@0.11.0
       jobs:
         build:
           docker:
             - image: circleci/golang:1.15
           steps:
+            - kube-orb/install-kubectl
             - kube-orb/install-kubeconfig:
-                kubeconfig: KUBECONFIG_STAGING_DATA
+                kubeconfig: KUBECONFIG_DATA
             - finc-k8s/db-migration:
                 namespace: example
                 migration-pod-for: example
