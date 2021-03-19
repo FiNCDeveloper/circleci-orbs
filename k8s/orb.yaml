@@ -107,7 +107,7 @@ commands:
         enum: ["none", "client", "server"]
         default: "none"
       deployment-target:
-        description: "deployment target. enum: 'stable' or 'canary'"
+        description: "Specify the value of finc.com/canary label to select target deployments. enum: 'stable' or 'canary'"
         type: enum
         enum: ["stable", "canary"]
     steps:
