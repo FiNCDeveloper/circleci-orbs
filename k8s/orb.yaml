@@ -82,6 +82,9 @@ commands:
     description: |
       Updates existing container images of resources matched with the given target label on the cluster using the `kubectl set image` command.
       If any of them fails to update then rollback the deployment resources.
+      Requirements:
+        - kubeconfig should be configured to connect to the cluster.
+        - Target deployment resources should have a 'finc.com/canary' label.
     parameters:
       container-image-updates:
         type: string
