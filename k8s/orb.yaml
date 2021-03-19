@@ -5,6 +5,7 @@ description: "FiNC Technologies kubernetes deploy toolbox"
 orbs:
   kube-orb: circleci/kubernetes@0.11.0
   kustomize: finc/kustomize@0.0.1
+  jq: circleci/jq@2.2.0
 
 commands:
   init-current-revision:
@@ -76,6 +77,131 @@ commands:
               else
                 echo "Did not unnecessary rollback as it. because same revision."
               fi
+
+  update-container-images:
+    description: |
+      Updates existing container images of resources matched with the given target label on the cluster using the `kubectl set image` command.
+      If any of them fails to update then rollback the deployment resources.
+    parameters:
+      container-image-updates:
+        type: string
+        description: |
+          Specify a list of container image updates in the space-delimited format.
+          (e.g. container1:latest nginx:1.9.1)
+      namespace:
+        type: string
+        description: |
+          The kubernetes namespace that should be used.
+        default: ""
+      watch-timeout:
+        type: string
+        default: ""
+      dry-run:
+        description: |
+          Specify the dry-run strategy that the `kubectl set image` command will be executed with.
+          See: https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#-em-image-em-
+        type: enum
+        enum: ["none", "client", "server"]
+        default: "none"
+      deployment-target:
+        description: "deployment target. enum: 'stable' or 'canary'"
+        type: enum
+        enum: ["stable", "canary"]
+    steps:
+      - jq/install
+      - run:
+          name: "Prepare image update"
+          description: "Get namespace for the later steps."
+          command: |
+            # NOTE:
+            # Naming rule basics: namespace, deployment name is repository name converted to kebab-case.
+            K8S_NAMESPACE="<< parameters.namespace >>"
+            if [ -z "K8S_NAMESPACE" ]; then
+              K8S_NAMESPACE=${CIRCLE_PROJECT_REPONAME//_/-}
+            fi
+            echo "export __FINC_K8S_NAMESPACE=${K8S_NAMESPACE}" >> $BASH_ENV
+      - run:
+          name: "Get current deployment revisons"
+          description: "Fetch deployment current revision from cluster. It's used to deployment rollout undo."
+          command: |
+            DEPLOYMENT_TARGET="<< parameters.deployment-target >>"
+
+            deployments=($(kubectl get -n $__FINC_K8S_NAMESPACE deployment -o=jsonpath='{.items[*].metadata.name}' -l finc.com/canary=${DEPLOYMENT_TARGET}))
+
+            echo "export __FINC_K8S_TARGET_DEPLOYMENTS=(${deployments[@]})" >> $BASH_ENV
+
+            for dep in ${deployments[@]}; do
+              # Deployment resource names are kebab case, so they have to be converted to underscore for the shell arg names.
+              echo "export __FINC_BEFORE_DEPLOYMENT_REVISION_OF_${dep//-/_}=$(kubectl get -n $__FINC_K8S_NAMESPACE deployment/$dep -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')" >> $BASH_ENV
+            done
+      - run:
+          name: "Update container images"
+          description: "Update container images by using the `kubectl set image`. Filter given container names before updating deployment images."
+          command: |
+            container_image_updates=($(echo "<< parameters.container-image-updates >>"))
+
+            DRY_RUN="<< parameters.dry-run >>"
+
+            WATCH_TIMEOUT="<< parameters.watch-timeout >>"
+
+            for dep in ${__FINC_K8S_TARGET_DEPLOYMENTS[@]}; do
+              echo "============================================================"
+              echo "deployment: $dep"
+              echo "============================================================"
+              # Build a new container_name=image pairs from the provided values to match the container image names in the target deployment resource.
+              pod_spec=$(kubectl get --namespace=$__FINC_K8S_NAMESPACE deployment/$dep -o jsonpath --template {.spec.template.spec})
+
+              for image in ${container_image_updates[@]}; do
+                repository=$(echo $image | awk -F ':' '{ print $1 }')
+                container_name=$(echo $pod_spec | jq -r --arg repository $repository '.containers[] | select(.image | startswith($repository)) | .name')
+                if [ -n "$container_name" ]; then
+                  set -- "$@" "${container_name}=${image}"
+                fi
+              done
+
+              echo "------------------------------------------------------------"
+              echo "set image"
+              echo "------------------------------------------------------------"
+              kubectl set image --namespace=$__FINC_K8S_NAMESPACE deployment/$dep $@ --dry-run=$DRY_RUN
+
+              echo "------------------------------------------------------------"
+              echo "rollout status"
+              echo "------------------------------------------------------------"
+              kubectl rollout status --namespace=$__FINC_K8S_NAMESPACE deployment/$dep --timeout=$WATCH_TIMEOUT
+
+              echo "------------------------------------------------------------"
+              echo "describe"
+              echo "------------------------------------------------------------"
+              kubectl describe --namespace=$__FINC_K8S_NAMESPACE deployment/$dep
+
+              set --
+            done
+      - run:
+          when: on_fail
+          name: "Rollback deployment resources"
+          command: |
+            for dep in ${__FINC_K8S_TARGET_DEPLOYMENTS[@]}; do
+              echo "============================================================"
+              echo "deployment: $dep"
+              echo "============================================================"
+              # Deployment resource names are kebab case, so they have to be converted to underscore for the shell arg names.
+              key_name="__FINC_BEFORE_DEPLOYMENT_REVISION_OF_${dep//-/_}"
+              rev=${!key_name}
+              target="deployment/$dep"
+
+              if [ -z "$rev" ]; then
+                echo "[WARN] unknown before revision"
+                continue
+              fi
+
+              CURRENT_REVISION=$(kubectl get -n "$__FINC_K8S_NAMESPACE" "$target" -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
+              if [[ -n "$target" && "$rev" != "$CURRENT_REVISION" ]]; then
+                echo "rollback $target to revision: $rev"
+                kubectl rollout undo "$target" -n "$__FINC_K8S_NAMESPACE" --to-revision=$rev
+              else
+                echo "It is unnecessary to rollback because the current and before-deployment revisons are the same."
+              fi
+            done
 
   db-migration:
     description: |
@@ -187,6 +313,26 @@ commands:
             kubectl delete --ignore-not-found jobs.batch -n "<< parameters.namespace >>" db-migration
 
 examples:
+  deployment-update-and-rollback-on-fail:
+    description: |
+      Update kubernetes resource.
+      Rollback deployment revision if deploy fail.
+    usage:
+      version: 2.1
+      orbs:
+        finc-k8s: finc/k8s@x.y.z
+        k8s: circleci/kubernetes@x.y.z
+      jobs:
+        build:
+          docker:
+            - image: circleci/golang:x.y
+          steps:
+            - finc-k8s/update-container-images:
+                container-image-updates: example1:latest example2:latest
+                namespace: example
+                watch-timeout: 5m
+                deployment-target: stable
+
   rollback-deployment-on-fail:
     description: |
       rollback deployment revision if deploy fail.
@@ -216,7 +362,7 @@ examples:
 
   db-migration:
     description: |
-      rollback deployment revision if deploy fail.
+      DB migration from kubernetes job.
 
       Requirements:
       - kubeconfig should be configured to connect to the cluster.
