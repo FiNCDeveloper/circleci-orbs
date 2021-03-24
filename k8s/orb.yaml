@@ -82,6 +82,9 @@ commands:
     description: |
       Updates existing container images of resources matched with the given target label on the cluster using the `kubectl set image` command.
       If any of them fails to update then rollback the deployment resources.
+      Requirements:
+        - kubeconfig should be configured to connect to the cluster.
+        - Target deployment resources should have a 'finc.com/canary' label.
     parameters:
       container-image-updates:
         type: string
@@ -104,7 +107,7 @@ commands:
         enum: ["none", "client", "server"]
         default: "none"
       deployment-target:
-        description: "deployment target. enum: 'stable' or 'canary'"
+        description: "Specify the value of finc.com/canary label to select target deployments. enum: 'stable' or 'canary'"
         type: enum
         enum: ["stable", "canary"]
     steps:
@@ -321,12 +324,15 @@ examples:
       version: 2.1
       orbs:
         finc-k8s: finc/k8s@x.y.z
-        k8s: circleci/kubernetes@x.y.z
+        kube-orb: circleci/kubernetes@x.y.z
       jobs:
         build:
           docker:
             - image: circleci/golang:x.y
           steps:
+            - kube-orb/install-kubectl
+            - kube-orb/install-kubeconfig:
+                kubeconfig: KUBECONFIG_STAGING_DATA
             - finc-k8s/update-container-images:
                 container-image-updates: example1:latest example2:latest
                 namespace: example
@@ -372,12 +378,13 @@ examples:
       version: 2.1
       orbs:
         finc-k8s: finc/k8s@0.0.1
-        k8s: circleci/kubernetes@0.11.0
+        kube-orb: circleci/kubernetes@0.11.0
       jobs:
         build:
           docker:
             - image: circleci/golang:1.15
           steps:
+            - kube-orb/install-kubectl
             - kube-orb/install-kubeconfig:
                 kubeconfig: KUBECONFIG_STAGING_DATA
             - finc-k8s/db-migration:
