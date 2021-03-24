@@ -332,7 +332,7 @@ examples:
           steps:
             - kube-orb/install-kubectl
             - kube-orb/install-kubeconfig:
-                kubeconfig: KUBECONFIG_DATA
+                kubeconfig: KUBECONFIG_STAGING_DATA
             - finc-k8s/update-container-images:
                 container-image-updates: example1:latest example2:latest
                 namespace: example
@@ -386,7 +386,7 @@ examples:
           steps:
             - kube-orb/install-kubectl
             - kube-orb/install-kubeconfig:
-                kubeconfig: KUBECONFIG_DATA
+                kubeconfig: KUBECONFIG_STAGING_DATA
             - finc-k8s/db-migration:
                 namespace: example
                 migration-pod-for: example
