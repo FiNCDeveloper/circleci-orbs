@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 
 - canary release
+- Add `update-container-images` command to update container images of multiple deployment resources.
+
+### Removed
+
+- Remove `init-current-revision` and `rollback-deployment-on-fail` in favor of newly added `update-container-images` command.
 
 ## [0.0.9] - 2020-12-03
 
