@@ -6,9 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2021-03-31
+
 ### Added
 
-- canary release
 - Add `update-container-images` command to update container images of multiple deployment resources.
 
 ### Removed
