@@ -19,7 +19,7 @@ commands:
         type: string
         description: |
           Specify a list of container image updates in the space-delimited format.
-          (e.g. ruby:latest nginx:1.9.1)
+          (e.g. ruby:latest your_repository.example.com/foo:bar)
       namespace:
         type: string
         description: |
@@ -263,7 +263,7 @@ examples:
             - kube-orb/install-kubeconfig:
                 kubeconfig: KUBECONFIG_STAGING_DATA
             - finc-k8s/update-container-images:
-                container-image-updates: golang:latest nginx:latest
+                container-image-updates: golang:latest your_repository.example.com/foo:bar
                 namespace: example
                 watch-timeout: 5m
                 deployment-target: stable
