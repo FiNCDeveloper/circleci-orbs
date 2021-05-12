@@ -171,6 +171,11 @@ commands:
         type: string
         description: "Placeholder for deployment envFrom configmap name. It's replaced with suffixed name from cluster deployment resource."
         default: "__CONFIG_MAP_PLACEHOLDER__"
+      server-side-apply:
+        description: |
+          Whether to run apply in the server instead of the client. This option is enabled by default.
+        type: boolean
+        default: true
     steps:
       - checkout
       - kustomize/install
@@ -200,9 +205,15 @@ commands:
             configmap=$(kubectl get deployment -n $K8S_NAMESPACE $K8S_DEPLOYMENT -ojson | jq -r '.spec.template.spec.containers[] | select(.name == "'$K8S_DEPLOYMENT'") | .envFrom[].configMapRef.name' | grep "^${K8S_DEPLOYMENT}-config")
             sed -i "s/<< parameters.configmap-name-placeholder >>/${configmap}/g" << parameters.job-manifest >>
 
+            if [ "<< parameters.server-side-apply >>" == "true" ]; then
+              KUBE_APPLY_COMMAND="kubectl apply --server-side"
+            else
+              KUBE_APPLY_COMMAND="kubectl apply"
+            fi
+
             kustomize edit set image "<< parameters.job-image >>"
             kustomize edit set namespace "<< parameters.namespace >>"
-            kustomize build | kubectl apply -f -
+            kustomize build | $KUBE_APPLY_COMMAND -f -
 
             kubectl wait -n "<< parameters.namespace >>" --for=condition=complete --timeout=30m job/db-migration & completion_pid=$!
             kubectl wait -n "<< parameters.namespace >>" --for=condition=failed   --timeout=30m job/db-migration && exit 1 & failure_pid=$!
