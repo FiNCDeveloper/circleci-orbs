@@ -7,9 +7,9 @@ orbs:
   jq: circleci/jq@2.2.0
 
 commands:
-  update-container-images:
+  update-deployment-images:
     description: |
-      Updates existing container images of resources matched with the given target label on the cluster using the `kubectl set image` command.
+      Updates existing container images of deployments matched with the given target label on the cluster using the `kubectl set image` command.
       If any of them fails to update then rollback the deployment resources.
       Requirements:
         - kubeconfig should be configured to connect to the cluster.

@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 - Update `db-migration` command to use `--server-side` option by default.
 
+### BREAKING CHANGES
+
+- Rename `update-container-images` to `update-deployment-images`.
+
 ## [1.0.0] - 2021-03-31
 
 ### Added
