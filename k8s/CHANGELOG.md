@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 
 - Update `db-migration` command to use `--server-side` option by default.
+- Add `update-workload-resource-images` command to update all cronjobs' images or jobs' images.
 
 ### BREAKING CHANGES
 

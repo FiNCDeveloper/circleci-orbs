@@ -135,6 +135,101 @@ commands:
               fi
             done
 
+  update-workload-resource-images:
+    description: |
+      Updates all existing container images of the given workload type resources on the cluster by using the `kubectl set image` command.
+      For deployments, use the update-deployment-images command for the rollback support.
+      Requirements:
+        - kubeconfig should be configured to connect to the cluster.
+    parameters:
+      container-image-updates:
+        type: string
+        description: |
+          Specify a list of container image updates in the space-delimited format.
+          (e.g. ruby:latest your_repository.example.com/foo:bar)
+      namespace:
+        type: string
+        description: |
+          The kubernetes namespace that should be used.
+        default: ""
+      workload-resource-type:
+        type: string
+        description: |
+          Specify the target workload resource type.
+          See: https://kubernetes.io/docs/concepts/workloads
+        enum: ["cronjob", "job"]
+      dry-run:
+        description: |
+          Specify the dry-run strategy that the `kubectl set image` command will be executed with.
+          See: https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#-em-image-em-
+        type: enum
+        enum: ["none", "client", "server"]
+        default: "none"
+    steps:
+      - jq/install
+      - run:
+          name: "Update workload resource images"
+          description: "Update container images by using the `kubectl set image`. Filter given container names before updating images."
+          command: |
+            # NOTE:
+            # Naming rule basics: namespace, deployment name is repository name converted to kebab-case.
+            K8S_NAMESPACE="<< parameters.namespace >>"
+            if [ -z "$K8S_NAMESPACE" ]; then
+              K8S_NAMESPACE=${CIRCLE_PROJECT_REPONAME//_/-}
+            fi
+
+            workload_resource_type="<< parameters.workload-resource-type >>"
+
+            tareget_resources=($(kubectl get -n "$K8S_NAMESPACE" "$workload_resource_type" -o=jsonpath='{.items[*].metadata.name}'))
+
+            case $workload_resource_type in
+              "cronjob")
+                spec_path=".spec.jobTemplate.spec.template.spec"
+                ;;
+              "job")
+                spec_path=".spec.template.spec"
+                ;;
+              *)
+                echo "workload-resource-type is unknown. Please update the orb command if it is a valid workload resource."
+                exit 1;
+            esac
+
+            container_image_updates=($(echo "<< parameters.container-image-updates >>"))
+
+            DRY_RUN="<< parameters.dry-run >>"
+
+            for resource in ${tareget_resources[@]}; do
+              echo "============================================================"
+              echo "$workload_resource_type: $resource"
+              echo "============================================================"
+              # Build a new container_name=image pairs from the provided values to match the container image names in the target deployment resource.
+              pod_spec=$(kubectl get --namespace="$K8S_NAMESPACE" "$workload_resource_type"/"$resource" -o jsonpath --template "{$spec_path}")
+
+              for image in ${container_image_updates[@]}; do
+                repository=$(echo "$image" | awk -F ':' '{ print $1 }')
+                container_name=$(echo "$pod_spec" | jq -r --arg repository $repository '.containers[] | select(.image | startswith($repository)) | .name')
+                if [ -n "$container_name" ]; then
+                  set -- "$@" "${container_name}=${image}"
+                fi
+              done
+
+              echo "------------------------------------------------------------"
+              echo "set image"
+              echo "------------------------------------------------------------"
+              set -x
+              kubectl set image --namespace="$K8S_NAMESPACE" "$workload_resource_type"/"$resource" "$@" --dry-run="$DRY_RUN"
+              { set +x; } 2>/dev/null
+
+              echo "------------------------------------------------------------"
+              echo "describe"
+              echo "------------------------------------------------------------"
+              set -x
+              kubectl describe --namespace="$K8S_NAMESPACE" "$workload_resource_type"/"$resource"
+              { set +x; } 2>/dev/null
+
+              set --
+            done
+
   db-migration:
     description: |
       DB migration from kubernetes job.
@@ -278,6 +373,27 @@ examples:
                 namespace: example
                 watch-timeout: 5m
                 deployment-target: stable
+
+  update-workload-resource-images:
+    description: |
+      Update images on the given kubernetes resource.
+    usage:
+      version: 2.1
+      orbs:
+        finc-k8s: finc/k8s@x.y.z
+        kube-orb: circleci/kubernetes@x.y.z
+      jobs:
+        build:
+          docker:
+            - image: circleci/golang:x.y
+          steps:
+            - kube-orb/install-kubectl
+            - kube-orb/install-kubeconfig:
+                kubeconfig: KUBECONFIG_STAGING_DATA
+            - finc-k8s/update-workload-resource-images:
+                container-image-updates: golang:latest your_repository.example.com/foo:bar
+                namespace: example
+                workload-resource-type: cronjob
 
   db-migration:
     description: |
