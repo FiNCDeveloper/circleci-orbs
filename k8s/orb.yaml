@@ -42,7 +42,7 @@ commands:
     steps:
       - jq/install
       - run:
-          name: "Prepare image update"
+          name: "Prepare deployment image update"
           description: "Get namespace for the later steps."
           command: |
             # NOTE:
@@ -67,7 +67,7 @@ commands:
               echo "export __FINC_BEFORE_DEPLOYMENT_REVISION_OF_${dep//-/_}=$(kubectl get -n $__FINC_K8S_NAMESPACE deployment/$dep -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')" >> $BASH_ENV
             done
       - run:
-          name: "Update container images"
+          name: "Update deployment container images"
           description: "Update container images by using the `kubectl set image`. Filter given container names before updating deployment images."
           command: |
             container_image_updates=($(echo "<< parameters.container-image-updates >>"))
