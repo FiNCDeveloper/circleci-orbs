@@ -214,14 +214,14 @@ commands:
               done
 
               echo "------------------------------------------------------------"
-              echo "set image"
+              echo "set image: $resource"
               echo "------------------------------------------------------------"
               set -x
               kubectl set image --namespace="$K8S_NAMESPACE" "$batch_resource_type"/"$resource" "$@" --dry-run="$DRY_RUN"
               { set +x; } 2>/dev/null
 
               echo "------------------------------------------------------------"
-              echo "describe"
+              echo "describe: $resource"
               echo "------------------------------------------------------------"
               set -x
               kubectl describe --namespace="$K8S_NAMESPACE" "$batch_resource_type"/"$resource"
