@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 
 - Update `db-migration` command to use `--server-side` option by default.
+- Add `update-batch-resource-images` command to update all cronjobs' images or jobs' images.
+
+### BREAKING CHANGES
+
+- Rename `update-container-images` to `update-deployment-images`.
 
 ## [1.0.0] - 2021-03-31
 
