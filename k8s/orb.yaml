@@ -67,8 +67,8 @@ commands:
               echo "export __FINC_BEFORE_DEPLOYMENT_REVISION_OF_${dep//-/_}=$(kubectl get -n $__FINC_K8S_NAMESPACE deployment/$dep -o=jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')" >> $BASH_ENV
             done
       - run:
-          name: "Update deployment container images"
-          description: "Update container images by using the `kubectl set image`. Filter given container names before updating deployment images."
+          name: "Update deployments' container images"
+          description: "Update deployments' container images by using the `kubectl set image`. Target containers are found by the repository name of images."
           command: |
             container_image_updates=($(echo "<< parameters.container-image-updates >>"))
 
@@ -80,7 +80,7 @@ commands:
               echo "============================================================"
               echo "deployment: $dep"
               echo "============================================================"
-              # Build a new container_name=image pairs from the provided values to match the container image names in the target deployment resource.
+              # Build a new container_name=image pairs. Container names are found by matching the repository name of new and exisitng container images of the target resource.
               pod_spec=$(kubectl get --namespace=$__FINC_K8S_NAMESPACE deployment/$dep -o jsonpath --template {.spec.template.spec})
 
               for image in ${container_image_updates[@]}; do
@@ -161,11 +161,11 @@ commands:
     steps:
       - jq/install
       - run:
-          name: "Update batch resource images"
-          description: "Update container images by using the `kubectl set image`. Filter given container names before updating images."
+          name: "Update cronjobs' container images"
+          description: "Update cronjobs' container images by using the `kubectl set image`. Target containers are found by the repository name of images."
           command: |
             # NOTE:
-            # Naming rule basics: namespace, deployment name is repository name converted to kebab-case.
+            # Naming rule basics: namespace is repository name converted to kebab-case.
             K8S_NAMESPACE="<< parameters.namespace >>"
             if [ -z "$K8S_NAMESPACE" ]; then
               K8S_NAMESPACE=${CIRCLE_PROJECT_REPONAME//_/-}
@@ -181,7 +181,7 @@ commands:
               echo "============================================================"
               echo "cronjob: $resource"
               echo "============================================================"
-              # Build a new container_name=image pairs from the provided values to match the container image names in the target deployment resource.
+              # Build a new container_name=image pairs. Container names are found by matching the repository name of new and exisitng container images of the target resource.
               pod_spec=$(kubectl get --namespace="$K8S_NAMESPACE" cronjob/"$resource" -o jsonpath --template "{.spec.jobTemplate.spec.template.spec}")
 
               for image in ${container_image_updates[@]}; do
