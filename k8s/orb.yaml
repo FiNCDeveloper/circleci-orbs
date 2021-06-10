@@ -347,7 +347,7 @@ examples:
             - kube-orb/install-kubectl
             - kube-orb/install-kubeconfig:
                 kubeconfig: KUBECONFIG_STAGING_DATA
-            - finc-k8s/update-container-images:
+            - finc-k8s/update-deployment-images:
                 container-image-updates: golang:latest your_repository.example.com/foo:bar
                 namespace: example
                 watch-timeout: 5m
