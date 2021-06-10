@@ -80,7 +80,7 @@ commands:
               echo "============================================================"
               echo "deployment: $dep"
               echo "============================================================"
-              # Build a new container_name=image pairs from the provided values to match the container image names in the target deployment resource.
+              # Build a new container_name=image pairs. Container names are found by matching the repository name of new and exisitng container images of the target resource.
               pod_spec=$(kubectl get --namespace=$__FINC_K8S_NAMESPACE deployment/$dep -o jsonpath --template {.spec.template.spec})
 
               for image in ${container_image_updates[@]}; do
@@ -181,7 +181,7 @@ commands:
               echo "============================================================"
               echo "cronjob: $resource"
               echo "============================================================"
-              # Build a new container_name=image pairs from the provided values to match the container image names in the target deployment resource.
+              # Build a new container_name=image pairs. Container names are found by matching the repository name of new and exisitng container images of the target resource.
               pod_spec=$(kubectl get --namespace="$K8S_NAMESPACE" cronjob/"$resource" -o jsonpath --template "{.spec.jobTemplate.spec.template.spec}")
 
               for image in ${container_image_updates[@]}; do
