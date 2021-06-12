@@ -92,19 +92,25 @@ commands:
               done
 
               echo "------------------------------------------------------------"
-              echo "set image"
+              echo "set image: $dep"
               echo "------------------------------------------------------------"
+              set -x
               kubectl set image --namespace=$__FINC_K8S_NAMESPACE deployment/$dep $@ --dry-run=$DRY_RUN
+              { set +x; } 2>/dev/null
 
               echo "------------------------------------------------------------"
-              echo "rollout status"
+              echo "rollout status: $dep"
               echo "------------------------------------------------------------"
+              set -x
               kubectl rollout status --namespace=$__FINC_K8S_NAMESPACE deployment/$dep --timeout=$WATCH_TIMEOUT
+              { set +x; } 2>/dev/null
 
               echo "------------------------------------------------------------"
-              echo "describe"
+              echo "describe: $dep"
               echo "------------------------------------------------------------"
+              set -x
               kubectl describe --namespace=$__FINC_K8S_NAMESPACE deployment/$dep
+              { set +x; } 2>/dev/null
 
               set --
             done
