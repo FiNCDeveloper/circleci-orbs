@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
+## [2.0.0] - 2021-06-14
+
 ### Added
 
 - Update `db-migration` command to use `--server-side` option by default.
