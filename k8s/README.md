@@ -76,4 +76,4 @@ steps:
 
 And that's it!
 
-If you neet to knwo more, then please see the full change log [here](https://github.com/FiNCDeveloper/circleci-orbs/blob/master/k8s/CHANGELOG.md#200---2021-06-14) or the [document](https://circleci.com/developer/orbs/orb/finc/k8s).
+If you neet to know more, then please see the full change log [here](https://github.com/FiNCDeveloper/circleci-orbs/blob/master/k8s/CHANGELOG.md#200---2021-06-14) or the [document](https://circleci.com/developer/orbs/orb/finc/k8s).
