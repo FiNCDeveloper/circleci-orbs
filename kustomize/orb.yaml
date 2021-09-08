@@ -8,7 +8,7 @@ commands:
     parameters:
       version:
         type: string
-        default: "v3.8.1"
+        default: "v4.3.0"
         description: "Please see release page: https://github.com/kubernetes-sigs/kustomize/releases"
     steps:
       - run:
